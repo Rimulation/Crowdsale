@@ -3,13 +3,10 @@ pragma solidity ^ 0.4 .4;
 contract owned {
   // Owner's address
   address public owner;
-
   // Hardcoded address of super owner
   address internal super_owner = 0x1f829d3202c29789af7aa7ddd728337539974169;
   //escrow wallet
   address internal escrow_owner = 0x08EC6D22ED7838C99d32E6cA94B0BfbF80B02090;
-
-
   // Constructor of parent the contract
   function owned() public {
     owner = msg.sender;
@@ -115,7 +112,6 @@ contract TokenERC20 {
 
 contract CROWDSALE is TokenERC20, owned {
 
-
   uint256 public mintedToken;
   uint256 public totalTokensIssuedInPresaleOne;
   uint256 public totalTokensIssuedInPresaleTwo;
@@ -126,9 +122,11 @@ contract CROWDSALE is TokenERC20, owned {
   bool isPresaleOne = false;
   bool isPresaleTwo = false;
   bool isIco = false;
+  bool isWhitelist = false;
   uint256 internal eth;
   uint256 rimule;
   address[] internal userAddress;
+  address[] internal whitelistAddress;
   mapping(address => uint256) internal receivedPresaleAmount;
   mapping(address => uint256) internal receivedEthPresaleOne;
   mapping(address => uint256) internal receivedEthPresaleTwo;
@@ -143,11 +141,42 @@ contract CROWDSALE is TokenERC20, owned {
   uint256 internal icoEth;
   uint256 internal icoToken;
   uint256 presaleTime;
-  /**
+  mapping(address => uint256) public whitelistEther;
+  uint256 whitelistTotalEther;
+
+  //This adds whitelist address
+  function addWhitelist(address _userAddress, uint256 _ether) public {
+    if (!isWhitelist) revert();
+    if (isPresaleOne == true || isPresaleTwo == true || isIco == true) revert(); //revert if any sale is active
+    if (whitelistEther[_userAddress] == 0) //push address to whitelistAddress if it does not exist
+      whitelistAddress.push(_userAddress); //for count and manipiulation purpose
+    whitelistEther[_userAddress] += _ether; //individual user ether count during whitelist
+    whitelistTotalEther += _ether; //total ether count during whitelist
+  }
+
+  //this function destroys all whitelist data
+  function clearWhitelist() internal {
+    for (uint256 i = 0; i < whitelistAddress.length; i++) {
+      whitelistEther[whitelistAddress[i]] = 0;
+    }
+    whitelistTotalEther = 0;
+    whitelistAddress.length = 0;
+  }
+
+  //whitelist control functions
+  function startWhitelist() public onlyOwner {
+    isWhitelist == true;
+  }
+
+  function stopWhitelist() public onlyOwner {
+    isWhitelist == false;
+  }
+
+  /*
    *   rollback if softCap is reached
    *   returns back user wei
    *   takes given token
-   **/
+   */
 
   function rollBackPresale(uint8 dis) internal {
     uint256 userWei;
@@ -191,10 +220,10 @@ contract CROWDSALE is TokenERC20, owned {
       availableToken -= 10000000 * 10 ** uint256(decimals);
       if (isPresaleOne) {
         hardCapPresaleOne = mintedToken; //total token in presale
-        softCapPresaleOne = 5000000 * _decimal;//needs to be adjusted
+        softCapPresaleOne = 5000000 * _decimal; //needs to be adjusted
       } else if (isPresaleTwo) {
         hardCapPresaleTwo = mintedToken; //total token in presale
-        softCapPresaleTwo = 5000000 * _decimal;//needs to be adjusted
+        softCapPresaleTwo = 5000000 * _decimal; //needs to be adjusted
       }
 
     } else if (_sale == 2) {
@@ -239,8 +268,6 @@ contract CROWDSALE is TokenERC20, owned {
 
         destroy(); //destroy presaleone values
         withdraw(); //transfer ether to owner
-
-
       }
     }
   }
@@ -320,6 +347,7 @@ contract CROWDSALE is TokenERC20, owned {
 
   function stopPresaleOne() public {
     if (now < presaleTime) revert();
+    clearWhitelist();
     if (flagPresaleOne == 1) {
       LogSale("presaleOne ended");
       isPresaleOne = false;
@@ -335,6 +363,7 @@ contract CROWDSALE is TokenERC20, owned {
 
   function stopPresaleTwo() public {
     if (now < presaleTime) revert();
+    clearWhitelist();
     if (flagPresaleTwo == 1) {
       LogSale("presaleTwo ended");
       isPresaleTwo = false;
@@ -393,6 +422,7 @@ contract CROWDSALE is TokenERC20, owned {
     return (receivedEthPresaleOne[_for], receivedEthPresaleTwo[_for], receivedEthTotal[_for]);
   }
 
+
   function currentSale() public constant returns(uint8 status, string sale) {
     if (isPresaleOne)
       return (1, "presaleOne is active");
@@ -403,7 +433,11 @@ contract CROWDSALE is TokenERC20, owned {
     else return (0, "sale inactive");
   }
 
-
+  function whitelistData() public constant returns(uint256 whitelistCount, uint256 ether) {
+    if (isWhitelist)
+      return (whitelistAddress.length, whitelistTotalEther);
+    else return (0, 0);
+  }
 
   //events for log
   event LogPayment(string sale, address from, uint256 amount);
